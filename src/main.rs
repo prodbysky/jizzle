@@ -33,12 +33,22 @@ impl std::fmt::Display for CompilerError {
 }
 
 fn real_main() -> Result<(), CompilerError> {
-    let src = source::Source::new("return 1");
+    let src = source::Source::new("return 1;");
+    println!("Lexing...");
+    let pre_lex = std::time::Instant::now();
     let tokens = lexer::lex_file(src)?;
+    println!("Lexing took: {:.2?}", pre_lex.elapsed());
 
+    println!("Parsing AST...");
+    let pre_parse = std::time::Instant::now();
     let one_expr = vec![ast::parse(&tokens)?];
+    println!("AST parsing took: {:.2?}", pre_parse.elapsed());
 
+    println!("Generating and compiling code...");
+    let pre_comp = std::time::Instant::now();
     backend::compile("main", &one_expr)?;
+    println!("Compilation took: {:.2?}", pre_comp.elapsed());
+    println!("Executable compiled. Available at: ./main");
 
     Ok(())
 }

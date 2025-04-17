@@ -55,7 +55,7 @@ pub fn compile(name: &str, program: &[ast::Statement]) -> Result<(), BackendErro
             &triple,
             "generic",
             "",
-            inkwell::OptimizationLevel::Aggressive,
+            inkwell::OptimizationLevel::None,
             inkwell::targets::RelocMode::Default,
             inkwell::targets::CodeModel::Default,
         )

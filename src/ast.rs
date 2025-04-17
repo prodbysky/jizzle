@@ -32,8 +32,17 @@ pub fn parse(mut tokens: &[Token]) -> Result<Statement, ASTError> {
     match tokens.first() {
         Some(Token::Return { here: _ }) => {
             tokens = &tokens[1..];
-            let (_rest, expr) = parse_expr(tokens)?;
-            Ok(Statement::Return(expr))
+            let (rest, expr) = parse_expr(tokens)?;
+            let tk = match rest.first() {
+                Some(Token::Semicolon { .. }) => Ok(Statement::Return(expr)),
+                Some(t) => Err(ASTError::UnexpectedToken {
+                    got: t.clone(),
+                    expected: Token::Semicolon { here: 0 },
+                }),
+                None => Err(ASTError::UnexpectedEOF),
+            }?;
+            tokens = &rest[1..];
+            Ok(tk)
         }
         None => Err(ASTError::UnexpectedEOF),
         Some(t) => Err(ASTError::UnexpectedToken {
