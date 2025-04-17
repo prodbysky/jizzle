@@ -9,6 +9,7 @@ pub enum Token {
     Var { here: usize },
     Semicolon { here: usize },
     Equal { here: usize },
+    Ident { value: String, here: usize },
 }
 
 #[derive(Debug, Error, PartialEq)]
@@ -69,7 +70,10 @@ pub fn lex_file(mut src: source::Source) -> LexerResult<Vec<Token>, LexerError> 
                 match ident.as_str() {
                     "return" => tokens.push(Token::Return { here: begin }),
                     "var" => tokens.push(Token::Var { here: begin }),
-                    _ => unimplemented!(),
+                    _ => tokens.push(Token::Ident {
+                        here: begin,
+                        value: ident,
+                    }),
                 }
             }
             Some(c) => {
@@ -199,6 +203,7 @@ impl std::fmt::Display for Token {
             Token::Number { value, .. } => write!(f, "{value}"),
             Token::Return { .. } => write!(f, "return"),
             Token::Var { .. } => write!(f, "var"),
+            Token::Ident { value, .. } => write!(f, "{value}"),
             Token::Semicolon { .. } => write!(f, ";"),
         }
     }

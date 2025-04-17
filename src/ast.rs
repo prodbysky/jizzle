@@ -18,6 +18,7 @@ pub enum Expression {
 #[derive(Debug, PartialEq)]
 pub enum Statement {
     Return(Expression),
+    DefineVar { name: String, value: Expression },
 }
 
 #[derive(Debug, Error, PartialEq)]
@@ -44,6 +45,45 @@ pub fn parse(mut tokens: &[Token]) -> Result<Vec<Statement>, ASTError> {
                     None => Err(ASTError::UnexpectedEOF),
                 }?);
                 tokens = &rest[1..];
+            }
+            Some(Token::Var { .. }) => {
+                tokens = &tokens[1..];
+                let name = match tokens.first() {
+                    Some(Token::Ident { value, .. }) => value,
+                    None => Err(ASTError::UnexpectedEOF)?,
+                    Some(t) => Err(ASTError::UnexpectedToken {
+                        got: t.clone(),
+                        expected: Token::Ident {
+                            here: 0,
+                            value: String::from("any"),
+                        },
+                    })?,
+                };
+                tokens = &tokens[1..];
+                match tokens.first() {
+                    Some(Token::Equal { .. }) => {}
+                    None => Err(ASTError::UnexpectedEOF)?,
+                    Some(t) => Err(ASTError::UnexpectedToken {
+                        got: t.clone(),
+                        expected: Token::Equal { here: 0 },
+                    })?,
+                };
+                tokens = &tokens[1..];
+                let (ts, value) = parse_expr(tokens)?;
+                tokens = ts;
+                match tokens.first() {
+                    Some(Token::Semicolon { .. }) => {}
+                    None => Err(ASTError::UnexpectedEOF)?,
+                    Some(t) => Err(ASTError::UnexpectedToken {
+                        got: t.clone(),
+                        expected: Token::Semicolon { here: 0 },
+                    })?,
+                };
+                tokens = &tokens[1..];
+                stmts.push(Statement::DefineVar {
+                    name: name.to_string(),
+                    value,
+                });
             }
             None => Err(ASTError::UnexpectedEOF)?,
             Some(t) => Err(ASTError::UnexpectedToken {
@@ -162,6 +202,7 @@ mod tests {
             }
         );
     }
+
     #[test]
     fn statement_return() {
         let tokens = vec![
@@ -181,6 +222,36 @@ mod tests {
                 here: 7,
                 len: 1
             })])
+        );
+    }
+
+    #[test]
+    fn statement_var() {
+        let tokens = vec![
+            Token::Var { here: 0 },
+            Token::Ident {
+                value: String::from("hello"),
+                here: 1,
+            },
+            Token::Equal { here: 2 },
+            Token::Number {
+                value: 0,
+                len: 1,
+                here: 3,
+            },
+            Token::Semicolon { here: 4 },
+        ];
+
+        assert_eq!(
+            parse(&tokens),
+            Ok(vec![Statement::DefineVar {
+                name: String::from("hello"),
+                value: Expression::Number {
+                    value: 0,
+                    len: 1,
+                    here: 3
+                }
+            }])
         );
     }
 }

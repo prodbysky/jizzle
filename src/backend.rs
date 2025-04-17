@@ -41,6 +41,7 @@ pub fn compile(name: &str, program: &[ast::Statement]) -> Result<(), BackendErro
                     .build_return(Some(&value))
                     .map_err(BackendError::IRBuild)?;
             }
+            st => unimplemented!("{:?}", st),
         }
     }
 
