@@ -1,7 +1,7 @@
 use crate::{error, source};
 use thiserror::Error;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Token {
     Number { value: u64, here: usize, len: usize },
     Plus { here: usize },
@@ -9,7 +9,7 @@ pub enum Token {
     Semicolon { here: usize },
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, PartialEq)]
 pub enum NumberLexError {
     Letter {
         offset: usize,
@@ -20,7 +20,7 @@ pub enum NumberLexError {
     },
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, PartialEq)]
 pub enum LexerError {
     UnexpectedChar {
         offset: usize,
@@ -59,7 +59,7 @@ pub fn lex_file(mut src: source::Source) -> LexerResult<Vec<Token>, LexerError> 
                 src.next();
             }
             Some(c) if c.is_alphabetic() || *c == '_' => {
-                let (begin, _len, ident) = lex_ident(&mut src).unwrap();
+                let (begin, _len, ident) = lex_ident(&mut src);
                 match ident.as_str() {
                     "return" => tokens.push(Token::Return { here: begin }),
                     _ => unimplemented!(),
@@ -87,19 +87,18 @@ pub fn lex_file(mut src: source::Source) -> LexerResult<Vec<Token>, LexerError> 
     Ok(tokens)
 }
 
-fn lex_ident(src: &mut source::Source) -> LexerResult<(usize, usize, String), ()> {
+fn lex_ident(src: &mut source::Source) -> (usize, usize, String) {
     let begin = src.offset();
     src.next();
 
     while src.peek().is_some_and(|c| c.is_alphanumeric() || *c == '_') {
         src.next();
     }
-
-    Ok((
+    (
         begin,
         src.offset() - begin,
         src.as_string().get(begin..src.offset()).unwrap().to_owned(),
-    ))
+    )
 }
 
 fn lex_number(src: &mut source::Source) -> LexerResult<Token, NumberLexError> {
@@ -193,5 +192,47 @@ impl std::fmt::Display for Token {
             Token::Return { .. } => write!(f, "return"),
             Token::Semicolon { .. } => write!(f, ";"),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn empty() {
+        let src = source::Source::new("");
+        assert_eq!(lex_file(src), Ok(vec![]));
+    }
+
+    #[test]
+    fn numbers() {
+        let src = source::Source::new("69 123 0");
+        assert_eq!(
+            lex_file(src),
+            Ok(vec![
+                Token::Number {
+                    value: 69,
+                    here: 0,
+                    len: 2
+                },
+                Token::Number {
+                    value: 123,
+                    here: 3,
+                    len: 3
+                },
+                Token::Number {
+                    value: 0,
+                    here: 7,
+                    len: 1
+                },
+            ])
+        );
+    }
+
+    #[test]
+    fn keywords() {
+        let src = source::Source::new("return");
+        assert_eq!(lex_file(src), Ok(vec![Token::Return { here: 0 }]));
     }
 }
