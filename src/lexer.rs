@@ -6,7 +6,9 @@ pub enum Token {
     Number { value: u64, here: usize, len: usize },
     Plus { here: usize },
     Return { here: usize },
+    Var { here: usize },
     Semicolon { here: usize },
+    Equal { here: usize },
 }
 
 #[derive(Debug, Error, PartialEq)]
@@ -54,6 +56,10 @@ pub fn lex_file(mut src: source::Source) -> LexerResult<Vec<Token>, LexerError> 
                 tokens.push(Token::Plus { here: src.offset() });
                 src.next();
             }
+            Some('=') => {
+                tokens.push(Token::Equal { here: src.offset() });
+                src.next();
+            }
             Some(';') => {
                 tokens.push(Token::Semicolon { here: src.offset() });
                 src.next();
@@ -62,6 +68,7 @@ pub fn lex_file(mut src: source::Source) -> LexerResult<Vec<Token>, LexerError> 
                 let (begin, _len, ident) = lex_ident(&mut src);
                 match ident.as_str() {
                     "return" => tokens.push(Token::Return { here: begin }),
+                    "var" => tokens.push(Token::Var { here: begin }),
                     _ => unimplemented!(),
                 }
             }
@@ -188,8 +195,10 @@ impl std::fmt::Display for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Token::Plus { .. } => write!(f, "+"),
+            Token::Equal { .. } => write!(f, "="),
             Token::Number { value, .. } => write!(f, "{value}"),
             Token::Return { .. } => write!(f, "return"),
+            Token::Var { .. } => write!(f, "var"),
             Token::Semicolon { .. } => write!(f, ";"),
         }
     }
@@ -232,7 +241,10 @@ mod tests {
 
     #[test]
     fn keywords() {
-        let src = source::Source::new("return");
-        assert_eq!(lex_file(src), Ok(vec![Token::Return { here: 0 }]));
+        let src = source::Source::new("return var");
+        assert_eq!(
+            lex_file(src),
+            Ok(vec![Token::Return { here: 0 }, Token::Var { here: 7 }])
+        );
     }
 }
