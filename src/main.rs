@@ -41,7 +41,7 @@ fn real_main() -> Result<(), CompilerError> {
 
     println!("Parsing AST...");
     let pre_parse = std::time::Instant::now();
-    let one_expr = vec![ast::parse(&tokens)?];
+    let one_expr = ast::parse(&tokens)?;
     println!("AST parsing took: {:.2?}", pre_parse.elapsed());
 
     println!("Generating and compiling code...");
