@@ -8,6 +8,10 @@ pub enum Expression {
         here: usize,
         len: usize,
     },
+    Variable {
+        name: String,
+        here: usize,
+    },
     Binary {
         left: Box<Expression>,
         op: Token,
@@ -123,6 +127,13 @@ fn parse_primary(tokens: &[Token]) -> Result<(&[Token], Expression), ASTError> {
                 value: *value,
                 here: *here,
                 len: *len,
+            },
+        )),
+        Some(Token::Ident { value, here }) => Ok((
+            &tokens[1..],
+            Expression::Variable {
+                here: *here,
+                name: value.to_string(),
             },
         )),
         Some(c) => Err(ASTError::UnexpectedToken {

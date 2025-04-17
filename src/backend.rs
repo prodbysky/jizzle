@@ -29,16 +29,15 @@ pub fn compile(name: &str, program: &[ast::Statement]) -> Result<(), BackendErro
 
     let main_block = ctx.append_basic_block(main_func, "entry");
 
+    let builder = ctx.create_builder();
     let mut variables = std::collections::HashMap::new();
-
-    let mut builder = ctx.create_builder();
     builder.position_at_end(main_block);
 
     for st in program {
         match st {
             ast::Statement::Return(value) => {
-                let value =
-                    eval_expression(&mut builder, &ctx, value).map_err(BackendError::IRBuild)?;
+                let value = eval_expression(&builder, &ctx, value, &variables)
+                    .map_err(BackendError::IRBuild)?;
                 builder
                     .build_return(Some(&value))
                     .map_err(BackendError::IRBuild)?;
@@ -47,12 +46,12 @@ pub fn compile(name: &str, program: &[ast::Statement]) -> Result<(), BackendErro
                 let ptr = builder
                     .build_alloca(i64_type, name)
                     .map_err(BackendError::IRBuild)?;
-                let value =
-                    eval_expression(&mut builder, &ctx, value).map_err(BackendError::IRBuild)?;
+                let value = eval_expression(&builder, &ctx, value, &variables)
+                    .map_err(BackendError::IRBuild)?;
                 builder
                     .build_store(ptr, value)
                     .map_err(BackendError::IRBuild)?;
-                variables.insert(name, ptr);
+                variables.insert(name.to_string(), ptr);
             }
         }
     }
@@ -99,17 +98,23 @@ pub fn compile(name: &str, program: &[ast::Statement]) -> Result<(), BackendErro
     Ok(())
 }
 
-fn eval_expression<'a>(
-    builder: &mut inkwell::builder::Builder<'a>,
-    ctx: &'a inkwell::context::Context,
+fn eval_expression<'ctx>(
+    builder: &inkwell::builder::Builder<'ctx>,
+    ctx: &'ctx inkwell::context::Context,
     expr: &ast::Expression,
-) -> Result<inkwell::values::IntValue<'a>, inkwell::builder::BuilderError> {
+    variables: &std::collections::HashMap<String, inkwell::values::PointerValue<'ctx>>,
+) -> Result<inkwell::values::IntValue<'ctx>, inkwell::builder::BuilderError> {
     let t = ctx.i64_type();
     match expr {
+        ast::Expression::Variable { name, .. } => {
+            let ptr = variables.get(name).unwrap();
+            let loaded = builder.build_load(t, *ptr, name).unwrap().into_int_value();
+            Ok(loaded)
+        }
         ast::Expression::Number { value, .. } => Ok(t.const_int(*value, false)),
         ast::Expression::Binary { left, op, right } => {
-            let left = eval_expression(builder, ctx, left)?;
-            let right = eval_expression(builder, ctx, right)?;
+            let left = eval_expression(builder, ctx, left, variables)?;
+            let right = eval_expression(builder, ctx, right, variables)?;
 
             match op {
                 crate::lexer::Token::Plus { .. } => builder.build_int_add(left, right, "add"),
