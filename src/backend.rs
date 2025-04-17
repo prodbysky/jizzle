@@ -29,6 +29,8 @@ pub fn compile(name: &str, program: &[ast::Statement]) -> Result<(), BackendErro
 
     let main_block = ctx.append_basic_block(main_func, "entry");
 
+    let mut variables = std::collections::HashMap::new();
+
     let mut builder = ctx.create_builder();
     builder.position_at_end(main_block);
 
@@ -41,7 +43,17 @@ pub fn compile(name: &str, program: &[ast::Statement]) -> Result<(), BackendErro
                     .build_return(Some(&value))
                     .map_err(BackendError::IRBuild)?;
             }
-            st => unimplemented!("{:?}", st),
+            ast::Statement::DefineVar { name, value } => {
+                let ptr = builder
+                    .build_alloca(i64_type, name)
+                    .map_err(BackendError::IRBuild)?;
+                let value =
+                    eval_expression(&mut builder, &ctx, value).map_err(BackendError::IRBuild)?;
+                builder
+                    .build_store(ptr, value)
+                    .map_err(BackendError::IRBuild)?;
+                variables.insert(name, ptr);
+            }
         }
     }
 
