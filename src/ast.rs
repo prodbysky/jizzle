@@ -1,17 +1,23 @@
 use crate::lexer::Token;
 use thiserror::Error;
+
 #[derive(Debug)]
-pub enum Node {
+pub enum Expression {
     Number {
         value: u64,
         here: usize,
         len: usize,
     },
     Binary {
-        left: Box<Node>,
+        left: Box<Expression>,
         op: Token,
-        right: Box<Node>,
+        right: Box<Expression>,
     },
+}
+
+#[derive(Debug)]
+pub enum Statement {
+    Return(Expression),
 }
 
 #[derive(Debug, Error)]
@@ -22,11 +28,22 @@ pub enum ASTError {
     UnexpectedToken { got: Token, expected: Token },
 }
 
-pub fn parse(tokens: &[Token]) -> Result<Node, ASTError> {
-    Ok(parse_expr(tokens)?.1)
+pub fn parse(mut tokens: &[Token]) -> Result<Statement, ASTError> {
+    match tokens.first() {
+        Some(Token::Return { here: _ }) => {
+            tokens = &tokens[1..];
+            let (_rest, expr) = parse_expr(tokens)?;
+            Ok(Statement::Return(expr))
+        }
+        None => Err(ASTError::UnexpectedEOF),
+        Some(t) => Err(ASTError::UnexpectedToken {
+            got: t.clone(),
+            expected: Token::Return { here: 0 },
+        }),
+    }
 }
 
-fn parse_expr(mut tokens: &[Token]) -> Result<(&[Token], Node), ASTError> {
+fn parse_expr(mut tokens: &[Token]) -> Result<(&[Token], Expression), ASTError> {
     let (ts, mut left) = parse_primary(tokens)?;
     tokens = ts;
 
@@ -39,18 +56,18 @@ fn parse_expr(mut tokens: &[Token]) -> Result<(&[Token], Node), ASTError> {
 
         let (ts, right) = parse_primary(tokens)?;
         tokens = ts;
-        left = Node::Binary {
+        left = Expression::Binary {
             left: Box::new(left),
             op,
             right: Box::new(right),
         }
     }
 }
-fn parse_primary(tokens: &[Token]) -> Result<(&[Token], Node), ASTError> {
+fn parse_primary(tokens: &[Token]) -> Result<(&[Token], Expression), ASTError> {
     match tokens.first() {
         Some(Token::Number { value, here, len }) => Ok((
             &tokens[1..],
-            Node::Number {
+            Expression::Number {
                 value: *value,
                 here: *here,
                 len: *len,

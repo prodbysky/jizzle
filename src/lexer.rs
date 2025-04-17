@@ -5,6 +5,7 @@ use thiserror::Error;
 pub enum Token {
     Number { value: u64, here: usize, len: usize },
     Plus { here: usize },
+    Return { here: usize },
 }
 
 #[derive(Debug, Error)]
@@ -52,6 +53,13 @@ pub fn lex_file(mut src: source::Source) -> LexerResult<Vec<Token>, LexerError> 
                 tokens.push(Token::Plus { here: src.offset() });
                 src.next();
             }
+            Some(c) if c.is_alphabetic() || *c == '_' => {
+                let (begin, _len, ident) = lex_ident(&mut src).unwrap();
+                match ident.as_str() {
+                    "return" => tokens.push(Token::Return { here: begin }),
+                    _ => unimplemented!(),
+                }
+            }
             Some(c) => {
                 return Err(LexerError::UnexpectedChar {
                     offset: src.offset(),
@@ -72,6 +80,21 @@ pub fn lex_file(mut src: source::Source) -> LexerResult<Vec<Token>, LexerError> 
         }
     }
     Ok(tokens)
+}
+
+fn lex_ident(src: &mut source::Source) -> LexerResult<(usize, usize, String), ()> {
+    let begin = src.offset();
+    src.next();
+
+    while src.peek().is_some_and(|c| c.is_alphanumeric() || *c == '_') {
+        src.next();
+    }
+
+    Ok((
+        begin,
+        src.offset() - begin,
+        src.as_string().get(begin..src.offset()).unwrap().to_owned(),
+    ))
 }
 
 fn lex_number(src: &mut source::Source) -> LexerResult<Token, NumberLexError> {
@@ -162,6 +185,7 @@ impl std::fmt::Display for Token {
         match self {
             Token::Plus { .. } => write!(f, "+"),
             Token::Number { value, .. } => write!(f, "{value}"),
+            Token::Return { .. } => write!(f, "return"),
         }
     }
 }
