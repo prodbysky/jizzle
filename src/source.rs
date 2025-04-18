@@ -1,13 +1,31 @@
 pub struct Source {
     src: Vec<char>,
+    file_name: Option<String>,
     offset: usize,
 }
 impl Source {
     pub fn new(src: &str) -> Self {
         Self {
             offset: 0,
+            file_name: None,
             src: src.chars().collect(),
         }
+    }
+
+    pub fn from_file<T>(path: T) -> std::io::Result<Self>
+    where
+        T: AsRef<std::path::Path> + std::convert::Into<String>,
+    {
+        let src = std::fs::read_to_string(&path)?;
+        Ok(Self {
+            offset: 0,
+            file_name: Some(path.into()),
+            src: src.chars().collect(),
+        })
+    }
+
+    pub fn path(&self) -> Option<&str> {
+        self.file_name.as_deref()
     }
     pub fn finished(&self) -> bool {
         self.src.len() <= self.offset

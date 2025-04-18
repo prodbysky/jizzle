@@ -19,26 +19,22 @@ pub enum Token {
 #[derive(Debug, Error, PartialEq)]
 pub enum NumberLexError {
     Letter {
-        offset: usize,
-        line: String,
+        file: Option<String>,
         line_number: usize,
         column_number: usize,
-        len: usize,
     },
 }
 
 #[derive(Debug, Error, PartialEq)]
 pub enum LexerError {
     UnexpectedChar {
-        offset: usize,
-        line: String,
+        file: Option<String>,
         line_number: usize,
         column_number: usize,
         c: char,
     },
     UnexpectedEOF {
-        offset: usize,
-        line: String,
+        file: Option<String>,
         line_number: usize,
         column_number: usize,
     },
@@ -98,8 +94,7 @@ pub fn lex_file(mut src: source::Source) -> LexerResult<Vec<Token>, LexerError> 
             }
             Some(c) => {
                 return Err(LexerError::UnexpectedChar {
-                    offset: src.offset(),
-                    line: src.get_line(l),
+                    file: src.path().map(|s| s.to_string()),
                     column_number: col,
                     line_number: l,
                     c: *c,
@@ -107,8 +102,7 @@ pub fn lex_file(mut src: source::Source) -> LexerResult<Vec<Token>, LexerError> 
             }
             None => {
                 return Err(LexerError::UnexpectedEOF {
-                    offset: src.offset(),
-                    line: src.get_line(l),
+                    file: src.path().map(|s| s.to_string()),
                     column_number: col,
                     line_number: l,
                 });
@@ -144,11 +138,9 @@ fn lex_number(src: &mut source::Source) -> LexerResult<Token, NumberLexError> {
             let (l, c) = src.get_position(begin);
 
             Err(NumberLexError::Letter {
-                offset: begin,
-                line: src.get_line(l),
+                file: src.path().map(|s| s.to_string()),
                 column_number: c,
                 line_number: l,
-                len: src.offset() - begin,
             })
         }
         _ => Ok(Token::Number {
@@ -173,22 +165,24 @@ impl std::fmt::Display for LexerError {
                 writeln!(f, "{e}")
             }
             Self::UnexpectedEOF {
-                offset: _,
-                line,
                 line_number,
                 column_number,
-            } => error::display_error(f, line, (*line_number, *column_number), 1, "Unexpected EOF"),
+                file,
+            } => error::display_error(
+                f,
+                file.as_deref(),
+                (*line_number, *column_number),
+                "Unexpected EOF",
+            ),
             Self::UnexpectedChar {
-                offset: _,
-                line,
                 line_number,
                 column_number,
                 c,
+                file,
             } => error::display_error(
                 f,
-                line,
+                file.as_deref(),
                 (*line_number, *column_number),
-                1,
                 format!("Unexpected char: {c}").as_str(),
             ),
         }
@@ -199,16 +193,13 @@ impl std::fmt::Display for NumberLexError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Letter {
-                offset: _,
-                line,
+                file,
                 line_number,
                 column_number,
-                len,
             } => error::display_error(
                 f,
-                line,
+                file.as_deref(),
                 (*line_number, *column_number),
-                *len,
                 "Numbers MUST be separated from letters",
             ),
         }
