@@ -5,6 +5,7 @@ use thiserror::Error;
 pub enum Token {
     Number { value: u64, here: usize, len: usize },
     Plus { here: usize },
+    Minus { here: usize },
     Return { here: usize },
     Var { here: usize },
     Semicolon { here: usize },
@@ -54,6 +55,10 @@ pub fn lex_file(mut src: source::Source) -> LexerResult<Vec<Token>, LexerError> 
                 tokens.push(lex_number(&mut src)?);
             }
             Some('+') => {
+                tokens.push(Token::Plus { here: src.offset() });
+                src.next();
+            }
+            Some('-') => {
                 tokens.push(Token::Plus { here: src.offset() });
                 src.next();
             }
@@ -199,6 +204,7 @@ impl std::fmt::Display for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Token::Plus { .. } => write!(f, "+"),
+            Token::Minus { .. } => write!(f, "-"),
             Token::Equal { .. } => write!(f, "="),
             Token::Number { value, .. } => write!(f, "{value}"),
             Token::Return { .. } => write!(f, "return"),

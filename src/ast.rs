@@ -106,6 +106,7 @@ fn parse_expr(mut tokens: &[Token]) -> Result<(&[Token], Expression), ASTError> 
     loop {
         let op = match tokens.first() {
             Some(Token::Plus { here }) => Token::Plus { here: *here },
+            Some(Token::Minus { here }) => Token::Minus { here: *here },
             _ => return Ok((tokens, left)),
         };
         tokens = &tokens[1..];

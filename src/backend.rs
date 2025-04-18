@@ -118,6 +118,7 @@ fn eval_expression<'ctx>(
 
             match op {
                 crate::lexer::Token::Plus { .. } => builder.build_int_add(left, right, "add"),
+                crate::lexer::Token::Minus { .. } => builder.build_int_sub(left, right, "sub"),
                 _ => unreachable!(),
             }
         }
