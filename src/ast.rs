@@ -1,7 +1,7 @@
 use crate::lexer::Token;
 use thiserror::Error;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Expression {
     Number {
         value: u64,

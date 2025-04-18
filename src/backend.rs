@@ -17,46 +17,115 @@ pub enum BackendError {
     OutputIR(inkwell::support::LLVMString),
 }
 
-pub fn compile(name: &str, program: &[ast::Statement]) -> Result<(), BackendError> {
-    inkwell::targets::Target::initialize_native(&inkwell::targets::InitializationConfig::default())
+struct Backend<'ctx> {
+    ctx: &'ctx inkwell::context::Context,
+    builder: inkwell::builder::Builder<'ctx>,
+    module: inkwell::module::Module<'ctx>,
+    variables: std::collections::HashMap<String, inkwell::values::PointerValue<'ctx>>,
+}
+
+impl<'ctx> Backend<'ctx> {
+    fn new(ctx: &'ctx inkwell::context::Context) -> Result<Self, BackendError> {
+        inkwell::targets::Target::initialize_native(
+            &inkwell::targets::InitializationConfig::default(),
+        )
         .map_err(BackendError::Target)?;
 
-    let ctx = inkwell::context::Context::create();
-    let module = ctx.create_module("main");
-    let i64_type = ctx.i64_type();
-    let main_type = i64_type.fn_type(&[], false);
-    let main_func = module.add_function("main", main_type, None);
+        let builder = ctx.create_builder();
+        Ok(Self {
+            ctx,
+            builder,
+            module: ctx.create_module("main"),
+            variables: std::collections::HashMap::new(),
+        })
+    }
 
-    let main_block = ctx.append_basic_block(main_func, "entry");
+    fn begin_main(&mut self) {
+        let i64_type = self.ctx.i64_type();
+        let main_type = i64_type.fn_type(&[], false);
+        let main_func = self.module.add_function("main", main_type, None);
+        let main_block = self.ctx.append_basic_block(main_func, "entry");
 
-    let builder = ctx.create_builder();
-    let mut variables = std::collections::HashMap::new();
-    builder.position_at_end(main_block);
+        self.builder.position_at_end(main_block);
+    }
 
-    for st in program {
-        match st {
-            ast::Statement::Return(value) => {
-                let value = eval_expression(&builder, &ctx, value, &variables)
-                    .map_err(BackendError::IRBuild)?;
-                builder
-                    .build_return(Some(&value))
-                    .map_err(BackendError::IRBuild)?;
+    fn eval_expression(
+        &mut self,
+        value: ast::Expression,
+    ) -> Result<inkwell::values::IntValue<'ctx>, inkwell::builder::BuilderError> {
+        let t = self.ctx.i64_type();
+        match value {
+            ast::Expression::Variable { name, .. } => {
+                let ptr = self.variables.get(&name).unwrap();
+                let loaded = self
+                    .builder
+                    .build_load(t, *ptr, &name)
+                    .unwrap()
+                    .into_int_value();
+                Ok(loaded)
             }
-            ast::Statement::DefineVar { name, value } => {
-                let ptr = builder
-                    .build_alloca(i64_type, name)
-                    .map_err(BackendError::IRBuild)?;
-                let value = eval_expression(&builder, &ctx, value, &variables)
-                    .map_err(BackendError::IRBuild)?;
-                builder
-                    .build_store(ptr, value)
-                    .map_err(BackendError::IRBuild)?;
-                variables.insert(name.to_string(), ptr);
+            ast::Expression::Number { value, .. } => Ok(t.const_int(value, false)),
+            ast::Expression::Binary { left, op, right } => {
+                let left = self.eval_expression(*left)?;
+                let right = self.eval_expression(*right)?;
+
+                match op {
+                    crate::lexer::Token::Plus { .. } => {
+                        self.builder.build_int_add(left, right, "add")
+                    }
+                    crate::lexer::Token::Minus { .. } => {
+                        self.builder.build_int_sub(left, right, "sub")
+                    }
+                    crate::lexer::Token::Star { .. } => {
+                        self.builder.build_int_mul(left, right, "mul")
+                    }
+                    _ => unreachable!(),
+                }
             }
         }
     }
 
-    module.verify().map_err(BackendError::IRVerification)?;
+    fn define_variable(&mut self, name: &str, value: ast::Expression) -> Result<(), BackendError> {
+        let i64_type = self.ctx.i64_type();
+        let ptr = self
+            .builder
+            .build_alloca(i64_type, name)
+            .map_err(BackendError::IRBuild)?;
+        let value = self.eval_expression(value).map_err(BackendError::IRBuild)?;
+        self.builder
+            .build_store(ptr, value)
+            .map_err(BackendError::IRBuild)?;
+        self.variables.insert(name.to_string(), ptr);
+        Ok(())
+    }
+}
+
+pub fn compile(name: &str, program: &[ast::Statement]) -> Result<(), BackendError> {
+    let ctx = inkwell::context::Context::create();
+    let mut backend = Backend::new(&ctx)?;
+    backend.begin_main();
+
+    for st in program {
+        match st {
+            ast::Statement::Return(value) => {
+                let value = backend
+                    .eval_expression(value.clone())
+                    .map_err(BackendError::IRBuild)?;
+                backend
+                    .builder
+                    .build_return(Some(&value))
+                    .map_err(BackendError::IRBuild)?;
+            }
+            ast::Statement::DefineVar { name, value } => {
+                backend.define_variable(name, value.clone())?;
+            }
+        }
+    }
+
+    backend
+        .module
+        .verify()
+        .map_err(BackendError::IRVerification)?;
 
     let triple = inkwell::targets::TargetMachine::get_default_triple();
     let target =
@@ -67,7 +136,7 @@ pub fn compile(name: &str, program: &[ast::Statement]) -> Result<(), BackendErro
             &triple,
             "generic",
             "",
-            inkwell::OptimizationLevel::None,
+            inkwell::OptimizationLevel::Aggressive,
             inkwell::targets::RelocMode::Default,
             inkwell::targets::CodeModel::Default,
         )
@@ -75,7 +144,7 @@ pub fn compile(name: &str, program: &[ast::Statement]) -> Result<(), BackendErro
 
     target_machine
         .write_to_file(
-            &module,
+            &backend.module,
             inkwell::targets::FileType::Object,
             format!("{name}.o").as_ref(),
         )
@@ -96,32 +165,4 @@ pub fn compile(name: &str, program: &[ast::Statement]) -> Result<(), BackendErro
         .wait()
         .unwrap();
     Ok(())
-}
-
-fn eval_expression<'ctx>(
-    builder: &inkwell::builder::Builder<'ctx>,
-    ctx: &'ctx inkwell::context::Context,
-    expr: &ast::Expression,
-    variables: &std::collections::HashMap<String, inkwell::values::PointerValue<'ctx>>,
-) -> Result<inkwell::values::IntValue<'ctx>, inkwell::builder::BuilderError> {
-    let t = ctx.i64_type();
-    match expr {
-        ast::Expression::Variable { name, .. } => {
-            let ptr = variables.get(name).unwrap();
-            let loaded = builder.build_load(t, *ptr, name).unwrap().into_int_value();
-            Ok(loaded)
-        }
-        ast::Expression::Number { value, .. } => Ok(t.const_int(*value, false)),
-        ast::Expression::Binary { left, op, right } => {
-            let left = eval_expression(builder, ctx, left, variables)?;
-            let right = eval_expression(builder, ctx, right, variables)?;
-
-            match op {
-                crate::lexer::Token::Plus { .. } => builder.build_int_add(left, right, "add"),
-                crate::lexer::Token::Minus { .. } => builder.build_int_sub(left, right, "sub"),
-                crate::lexer::Token::Star { .. } => builder.build_int_mul(left, right, "mul"),
-                _ => unreachable!(),
-            }
-        }
-    }
 }
