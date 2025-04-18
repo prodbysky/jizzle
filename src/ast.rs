@@ -159,10 +159,23 @@ fn parse_primary(tokens: &[Token]) -> Result<(&[Token], Expression), ASTError> {
                 name: value.to_string(),
             },
         )),
-        Some(c) => {
+        Some(Token::OpenParen { .. }) => {
+            let tokens = &tokens[1..];
             let (ts, expr) = parse_expr(tokens)?;
-            Ok((ts, expr))
+            let tokens = ts;
+            match tokens.first() {
+                Some(Token::CloseParen { .. }) => Ok((&tokens[1..], expr)),
+                None => Err(ASTError::UnexpectedEOF)?,
+                Some(t) => Err(ASTError::UnexpectedToken {
+                    got: t.clone(),
+                    expected: Token::CloseParen { here: 0 },
+                })?,
+            }
         }
+        Some(t) => Err(ASTError::UnexpectedToken {
+            got: t.clone(),
+            expected: Token::OpenParen { here: 0 },
+        })?,
         None => Err(ASTError::UnexpectedEOF),
     }
 }
