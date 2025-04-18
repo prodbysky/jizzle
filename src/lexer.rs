@@ -6,6 +6,7 @@ pub enum Token {
     Number { value: u64, here: usize, len: usize },
     Plus { here: usize },
     Minus { here: usize },
+    Star { here: usize },
     Return { here: usize },
     Var { here: usize },
     Semicolon { here: usize },
@@ -59,7 +60,11 @@ pub fn lex_file(mut src: source::Source) -> LexerResult<Vec<Token>, LexerError> 
                 src.next();
             }
             Some('-') => {
-                tokens.push(Token::Plus { here: src.offset() });
+                tokens.push(Token::Minus { here: src.offset() });
+                src.next();
+            }
+            Some('*') => {
+                tokens.push(Token::Star { here: src.offset() });
                 src.next();
             }
             Some('=') => {
@@ -205,6 +210,7 @@ impl std::fmt::Display for Token {
         match self {
             Token::Plus { .. } => write!(f, "+"),
             Token::Minus { .. } => write!(f, "-"),
+            Token::Star { .. } => write!(f, "*"),
             Token::Equal { .. } => write!(f, "="),
             Token::Number { value, .. } => write!(f, "{value}"),
             Token::Return { .. } => write!(f, "return"),

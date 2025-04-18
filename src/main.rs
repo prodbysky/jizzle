@@ -33,7 +33,7 @@ impl std::fmt::Display for CompilerError {
 }
 
 fn real_main() -> Result<(), CompilerError> {
-    let src = source::Source::new("var a = 5;return a;");
+    let src = source::Source::new("var a = 5 * 2 + 1;return a;");
     println!("Lexing...");
     let pre_lex = std::time::Instant::now();
     let tokens = lexer::lex_file(src)?;

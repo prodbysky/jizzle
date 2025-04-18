@@ -100,13 +100,34 @@ pub fn parse(mut tokens: &[Token]) -> Result<Vec<Statement>, ASTError> {
 }
 
 fn parse_expr(mut tokens: &[Token]) -> Result<(&[Token], Expression), ASTError> {
-    let (ts, mut left) = parse_primary(tokens)?;
+    let (ts, mut left) = parse_mult(tokens)?;
     tokens = ts;
 
     loop {
         let op = match tokens.first() {
             Some(Token::Plus { here }) => Token::Plus { here: *here },
             Some(Token::Minus { here }) => Token::Minus { here: *here },
+            _ => return Ok((tokens, left)),
+        };
+        tokens = &tokens[1..];
+
+        let (ts, right) = parse_mult(tokens)?;
+        tokens = ts;
+        left = Expression::Binary {
+            left: Box::new(left),
+            op,
+            right: Box::new(right),
+        }
+    }
+}
+
+fn parse_mult(mut tokens: &[Token]) -> Result<(&[Token], Expression), ASTError> {
+    let (ts, mut left) = parse_primary(tokens)?;
+    tokens = ts;
+
+    loop {
+        let op = match tokens.first() {
+            Some(Token::Star { here }) => Token::Star { here: *here },
             _ => return Ok((tokens, left)),
         };
         tokens = &tokens[1..];
@@ -120,6 +141,7 @@ fn parse_expr(mut tokens: &[Token]) -> Result<(&[Token], Expression), ASTError> 
         }
     }
 }
+
 fn parse_primary(tokens: &[Token]) -> Result<(&[Token], Expression), ASTError> {
     match tokens.first() {
         Some(Token::Number { value, here, len }) => Ok((
@@ -137,14 +159,10 @@ fn parse_primary(tokens: &[Token]) -> Result<(&[Token], Expression), ASTError> {
                 name: value.to_string(),
             },
         )),
-        Some(c) => Err(ASTError::UnexpectedToken {
-            got: c.clone(),
-            expected: Token::Number {
-                value: 0,
-                len: 0,
-                here: 0,
-            },
-        }),
+        Some(c) => {
+            let (ts, expr) = parse_expr(tokens)?;
+            Ok((ts, expr))
+        }
         None => Err(ASTError::UnexpectedEOF),
     }
 }
