@@ -4,10 +4,12 @@ mod error;
 mod lexer;
 mod source;
 
+use clap::Parser;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum CompilerError {
+    IO(#[from] std::io::Error),
     Lexer(#[from] lexer::LexerError),
     Ast(#[from] ast::ASTError),
     Backend(#[from] backend::BackendError),
@@ -28,12 +30,19 @@ impl std::fmt::Display for CompilerError {
                 writeln!(f, "Codegen failure")?;
                 writeln!(f, "{e}")
             }
+            Self::IO(e) => {
+                writeln!(f, "IO error")?;
+                writeln!(f, "{e}")
+            }
         }
     }
 }
 
 fn real_main() -> Result<(), CompilerError> {
-    let src = source::Source::new("var a = 5 * (2 + 1);return a;");
+    let conf = Config::parse();
+    let s = std::fs::read_to_string(conf.file_name)?;
+    let trim = s.trim();
+    let src = source::Source::new(trim);
     println!("Lexing...");
     let pre_lex = std::time::Instant::now();
     let tokens = lexer::lex_file(src)?;
@@ -46,9 +55,9 @@ fn real_main() -> Result<(), CompilerError> {
 
     println!("Generating and compiling code...");
     let pre_comp = std::time::Instant::now();
-    backend::compile("main", &one_expr)?;
+    backend::compile(&conf.output, &one_expr)?;
     println!("Compilation took: {:.2?}", pre_comp.elapsed());
-    println!("Executable compiled. Available at: ./main");
+    println!("Executable compiled. Available at: ./{}", conf.output);
 
     Ok(())
 }
@@ -57,4 +66,13 @@ fn main() {
     if let Err(e) = real_main() {
         println!("{e}");
     }
+}
+#[derive(Debug, Parser)]
+struct Config {
+    /// The program source code file name
+    #[arg()]
+    file_name: String,
+    /// Executable output name
+    #[arg(short, default_value_t = String::from("main"))]
+    output: String,
 }
