@@ -9,6 +9,8 @@ pub enum Token {
     Star { here: usize },
     OpenParen { here: usize },
     CloseParen { here: usize },
+    OpenCurly { here: usize },
+    CloseCurly { here: usize },
     Return { here: usize },
     Var { here: usize },
     Semicolon { here: usize },
@@ -79,6 +81,14 @@ pub fn lex_file(mut src: source::Source) -> LexerResult<Vec<Token>, LexerError> 
             }
             Some(')') => {
                 tokens.push(Token::CloseParen { here: src.offset() });
+                src.next();
+            }
+            Some('{') => {
+                tokens.push(Token::OpenCurly { here: src.offset() });
+                src.next();
+            }
+            Some('}') => {
+                tokens.push(Token::CloseCurly { here: src.offset() });
                 src.next();
             }
             Some(c) if c.is_alphabetic() || *c == '_' => {
@@ -213,6 +223,8 @@ impl std::fmt::Display for Token {
             Token::Minus { .. } => write!(f, "-"),
             Token::OpenParen { .. } => write!(f, "("),
             Token::CloseParen { .. } => write!(f, ")"),
+            Token::OpenCurly { .. } => write!(f, "{{"),
+            Token::CloseCurly { .. } => write!(f, "}}"),
             Token::Star { .. } => write!(f, "*"),
             Token::Equal { .. } => write!(f, "="),
             Token::Number { value, .. } => write!(f, "{value}"),

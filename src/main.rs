@@ -40,9 +40,7 @@ impl std::fmt::Display for CompilerError {
 
 fn real_main() -> Result<(), CompilerError> {
     let conf = Config::parse();
-    let s = std::fs::read_to_string(conf.file_name)?;
-    let trim = s.trim();
-    let src = source::Source::new(trim);
+    let src = source::Source::from_file(&conf.file_name)?;
     println!("Lexing...");
     let pre_lex = std::time::Instant::now();
     let tokens = lexer::lex_file(src)?;

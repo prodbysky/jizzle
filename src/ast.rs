@@ -36,67 +36,69 @@ pub enum ASTError {
 pub fn parse(mut tokens: &[Token]) -> Result<Vec<Statement>, ASTError> {
     let mut stmts = vec![];
     while !tokens.is_empty() {
-        match tokens.first() {
-            Some(Token::Return { here: _ }) => {
-                tokens = &tokens[1..];
-                let (rest, expr) = parse_expr(tokens)?;
-                stmts.push(match rest.first() {
-                    Some(Token::Semicolon { .. }) => Ok(Statement::Return(expr)),
-                    Some(t) => Err(ASTError::UnexpectedToken {
-                        got: t.clone(),
-                        expected: Token::Semicolon { here: 0 },
-                    }),
-                    None => Err(ASTError::UnexpectedEOF),
-                }?);
-                tokens = &rest[1..];
-            }
-            Some(Token::Var { .. }) => {
-                tokens = &tokens[1..];
-                let name = match tokens.first() {
-                    Some(Token::Ident { value, .. }) => value,
-                    None => Err(ASTError::UnexpectedEOF)?,
-                    Some(t) => Err(ASTError::UnexpectedToken {
-                        got: t.clone(),
-                        expected: Token::Ident {
-                            here: 0,
-                            value: String::from("any"),
-                        },
-                    })?,
-                };
-                tokens = &tokens[1..];
-                match tokens.first() {
-                    Some(Token::Equal { .. }) => {}
-                    None => Err(ASTError::UnexpectedEOF)?,
-                    Some(t) => Err(ASTError::UnexpectedToken {
-                        got: t.clone(),
-                        expected: Token::Equal { here: 0 },
-                    })?,
-                };
-                tokens = &tokens[1..];
-                let (ts, value) = parse_expr(tokens)?;
-                tokens = ts;
-                match tokens.first() {
-                    Some(Token::Semicolon { .. }) => {}
-                    None => Err(ASTError::UnexpectedEOF)?,
-                    Some(t) => Err(ASTError::UnexpectedToken {
-                        got: t.clone(),
-                        expected: Token::Semicolon { here: 0 },
-                    })?,
-                };
-                tokens = &tokens[1..];
-                stmts.push(Statement::DefineVar {
-                    name: name.to_string(),
-                    value,
-                });
-            }
-            None => Err(ASTError::UnexpectedEOF)?,
-            Some(t) => Err(ASTError::UnexpectedToken {
-                got: t.clone(),
-                expected: Token::Return { here: 0 },
-            })?,
-        }
+        let (rest, stmt) = parse_statement(tokens)?;
+        stmts.push(stmt);
+        tokens = rest;
     }
     Ok(stmts)
+}
+
+fn parse_statement(tokens: &[Token]) -> Result<(&[Token], Statement), ASTError> {
+    let (rest, stmt) = match tokens.split_first() {
+        Some((Token::Return { .. }, rest)) => {
+            let (rest, expr) = parse_expr(rest)?;
+            (rest, Statement::Return(expr))
+        }
+        Some((Token::Var { here }, rest)) => {
+            let (rest, name) = match rest.split_first() {
+                Some((Token::Ident { value, .. }, rest)) => (rest, value),
+                Some((t, ..)) => {
+                    return Err(ASTError::UnexpectedToken {
+                        got: t.clone(),
+                        expected: Token::Ident {
+                            value: "any".to_string(),
+                            here: *here,
+                        },
+                    });
+                }
+                None => return Err(ASTError::UnexpectedEOF),
+            };
+            let rest = match rest.split_first() {
+                Some((Token::Equal { .. }, rest)) => rest,
+                Some((t, ..)) => {
+                    return Err(ASTError::UnexpectedToken {
+                        got: t.clone(),
+                        expected: Token::Semicolon { here: *here },
+                    });
+                }
+                None => return Err(ASTError::UnexpectedEOF),
+            };
+            let (rest, expr) = parse_expr(rest)?;
+            (
+                rest,
+                Statement::DefineVar {
+                    name: name.to_string(),
+                    value: expr,
+                },
+            )
+        }
+        None => {
+            return Err(ASTError::UnexpectedEOF);
+        }
+        _ => unimplemented!(),
+    };
+    match rest.split_first() {
+        Some((Token::Semicolon { .. }, rest)) => return Ok((rest, stmt)),
+        Some((t, ..)) => {
+            return Err(ASTError::UnexpectedToken {
+                got: t.clone(),
+                expected: Token::Semicolon { here: 0 },
+            });
+        }
+        None => {
+            return Err(ASTError::UnexpectedEOF);
+        }
+    }
 }
 
 fn parse_expr(mut tokens: &[Token]) -> Result<(&[Token], Expression), ASTError> {

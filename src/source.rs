@@ -17,10 +17,11 @@ impl Source {
         T: AsRef<std::path::Path> + std::convert::Into<String>,
     {
         let src = std::fs::read_to_string(&path)?;
+        let s = src.trim();
         Ok(Self {
             offset: 0,
             file_name: Some(path.into()),
-            src: src.chars().collect(),
+            src: s.chars().collect(),
         })
     }
 
