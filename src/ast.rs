@@ -36,9 +36,22 @@ pub enum ASTError {
 pub fn parse(mut tokens: &[Token]) -> Result<Vec<Statement>, ASTError> {
     let mut stmts = vec![];
     while !tokens.is_empty() {
-        let (rest, stmt) = parse_statement(tokens)?;
-        stmts.push(stmt);
-        tokens = rest;
+        match tokens.first() {
+            None => {
+                return Err(ASTError::UnexpectedEOF);
+            }
+            Some(Token::Var { .. } | Token::Return { .. }) => {
+                let (rest, stmt) = parse_statement(tokens)?;
+                stmts.push(stmt);
+                tokens = rest;
+            }
+            Some(t) => {
+                return Err(ASTError::UnexpectedToken {
+                    got: t.clone(),
+                    expected: Token::Return { here: 0 },
+                });
+            }
+        }
     }
     Ok(stmts)
 }
