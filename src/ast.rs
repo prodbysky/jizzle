@@ -88,16 +88,12 @@ fn parse_statement(tokens: &[Token]) -> Result<(&[Token], Statement), ASTError> 
         _ => unimplemented!(),
     };
     match rest.split_first() {
-        Some((Token::Semicolon { .. }, rest)) => return Ok((rest, stmt)),
-        Some((t, ..)) => {
-            return Err(ASTError::UnexpectedToken {
-                got: t.clone(),
-                expected: Token::Semicolon { here: 0 },
-            });
-        }
-        None => {
-            return Err(ASTError::UnexpectedEOF);
-        }
+        Some((Token::Semicolon { .. }, rest)) => Ok((rest, stmt)),
+        Some((t, ..)) => Err(ASTError::UnexpectedToken {
+            got: t.clone(),
+            expected: Token::Semicolon { here: 0 },
+        }),
+        None => Err(ASTError::UnexpectedEOF),
     }
 }
 
